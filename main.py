@@ -82,11 +82,13 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
 
     skip_4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.add(x, skip_4)
+    x = tf.layers.batch_normalization(x)
     x = tf.layers.conv2d_transpose(x, num_classes, 4, strides=(2, 2), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose2: ", summarize=10, first_n=1))
 
     skip_3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.add(x, skip_3)
+    x = tf.layers.batch_normalization(x)
     x = tf.layers.conv2d_transpose(x, num_classes, 16, strides=(8, 8), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose3: ", summarize=10, first_n=1))
 
@@ -105,8 +107,8 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
     # TODO: Implement function
-    tf.summary.image("prediction", 255*tf.nn.softmax(nn_last_layer))
-    tf.summary.image("label", 255*tf.nn.softmax(correct_label))
+    tf.summary.image("prediction", tf.expand_dims(255*tf.nn.softmax(nn_last_layer[:,:,:, 1]), 3))
+    tf.summary.image("label", tf.expand_dims(255*tf.nn.softmax(correct_label[:,:,:, 1]), 3))
 
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
     correct_label = tf.reshape(correct_label, (-1, num_classes))
@@ -195,10 +197,10 @@ def run():
     # You'll need a GPU with at least 10 teraFLOPS to train on.
     #  https://www.cityscapes-dataset.com/
 
-    learning_rate = 0.01
-    epochs = 1 # 6 was enough for him
+    learning_rate = 0.001
+    epochs = 6 # 6 was enough for him
     labels_tensor = tf.placeholder(tf.float32, [None, None, None, num_classes])
-    batch_size = 1
+    batch_size = 10
 
     with tf.Session() as sess:
         # Path to vgg model
