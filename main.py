@@ -19,6 +19,17 @@ if not tf.test.gpu_device_name():
 else:
     print('Default GPU Device: {}'.format(tf.test.gpu_device_name()))
 
+def variable_summaries(var):
+  """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
+  with tf.name_scope('summaries'):
+    mean = tf.reduce_mean(var)
+    tf.summary.scalar('mean', mean)
+    with tf.name_scope('stddev'):
+      stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+    tf.summary.scalar('stddev', stddev)
+    tf.summary.scalar('max', tf.reduce_max(var))
+    tf.summary.scalar('min', tf.reduce_min(var))
+    tf.summary.histogram('histogram', var)
 
 def load_vgg(sess, vgg_path):
     """
@@ -96,22 +107,30 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     """
     # TODO: Implement function
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
+    correct_label = tf.reshape(correct_label, (-1, num_classes))
     adam = tf.train.AdamOptimizer(learning_rate)
-    cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+    with tf.name_scope('loss'):
+        cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+    with tf.name_scope('accuracy'):
+        correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(correct_label, 1))
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    variable_summaries(cross_entropy_loss)
+    variable_summaries(accuracy)
     train_op = adam.minimize(cross_entropy_loss)
 
     return logits, train_op, cross_entropy_loss
-tests.test_optimize(optimize)
+# tests.test_optimize(optimize)
 
 
-def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_image,
-             correct_label, keep_prob, learning_rate, debug_ops):
+def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, train_op, cross_entropy_loss, input_image,
+             correct_label, keep_prob, learning_rate, debug_ops, merged, train_writer, test_writer):
     """
     Train neural network and print out the loss during training.
     :param sess: TF Session
     :param epochs: Number of epochs
     :param batch_size: Batch size
     :param get_batches_fn: Function to get batches of training data.  Call using get_batches_fn(batch_size)
+    :param get_batches_fn_test: Function to get batches of testing data.  Call using get_batches_fn(batch_size)
     :param train_op: TF Operation to train the neural network
     :param cross_entropy_loss: TF Tensor for the amount of loss
     :param input_image: TF Placeholder for input images
@@ -119,19 +138,41 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param keep_prob: TF Placeholder for dropout keep probability
     :param learning_rate: TF Placeholder for learning rate
     :param debug_ops: Ops to run for debugging
+    :param merged: Merged variable_summaries op
+    :param train_writer: Train logs writer
+    :param test_writer: Test logs writer
     """
 
     # TODO: Implement function
     for epoch in range(epochs):
         batch = 1
+        test_batches = get_batches_fn_test(batch_size)
         for image, label in get_batches_fn(batch_size):
             #training
-            loss, _, _ = sess.run([cross_entropy_loss, train_op, debug_ops], feed_dict={
+            summary, loss, _, _ = sess.run([merged, cross_entropy_loss, train_op, debug_ops], feed_dict={
                 input_image: image,
                 correct_label: label,
                 keep_prob: 0.5,
             })
             print("epoch {}, batch {}, batch-loss: {}".format(epoch, batch, loss))
+            train_writer.add_summary(summary, epoch*batch+batch)
+
+
+            if batch % 10 == 0:
+                try:
+                    test_image, test_label = next(test_batches)
+                except StopIteration:
+                    test_batches = get_batches_fn_test(batch_size)
+                    test_image, test_label = next(test_batches)
+
+                    summary, loss = sess.run([merged, cross_entropy_loss], feed_dict={
+                        input_image: test_image,
+                        correct_label: test_label,
+                        keep_prob: 1.0,
+                    })
+                test_writer.add_summary(summary, epoch*batch+batch)
+                print("  test-batch-loss: {}".format(epoch, batch, loss))
+
             batch += 1
 # tests.test_train_nn(train_nn)
 
@@ -160,6 +201,7 @@ def run():
         vgg_path = os.path.join(data_dir, 'vgg')
         # Create function to get batches
         get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape)
+        get_batches_fn_test = helper.gen_batch_function(os.path.join(data_dir, 'data_road/testing'), image_shape)
 
         # OPTIONAL: Augment Images for better results
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
@@ -169,10 +211,16 @@ def run():
         output_layer, debug_ops = layers(layer3_out_tensor, layer4_out_tensor, layer7_out_tensor, num_classes)
         logits, train_op, cross_entropy_loss = optimize(output_layer, labels_tensor, learning_rate, num_classes)
 
+        # Merge all the summaries and write them out to /tmp/mnist_logs (by default)
+        merged = tf.summary.merge_all()
+        train_writer = tf.summary.FileWriter('logs/train', sess.graph)
+        test_writer = tf.summary.FileWriter('logs/test')
+
         sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
         # TODO: Train NN using the train_nn function
-        train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_loss, input_tensor,
-                     labels_tensor, keep_prob_tensor, learning_rate, debug_ops)
+        train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test,
+                     train_op, cross_entropy_loss, input_tensor,
+                     labels_tensor, keep_prob_tensor, learning_rate, debug_ops, merged, train_writer, test_writer)
 
         # TODO: Save inference data using helper.save_inference_samples
         #  helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
