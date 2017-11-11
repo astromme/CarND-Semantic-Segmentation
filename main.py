@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
-#mynerva start
 import os.path
 import tensorflow as tf
 import helper
 import warnings
 from distutils.version import LooseVersion
 import project_tests as tests
-#mynerva end
+import datetime
 
 # Check TensorFlow Version
 assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
@@ -106,8 +105,8 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
     # TODO: Implement function
-    tf.summary.image("prediction", nn_last_layer)
-    tf.summary.image("label", correct_label)
+    tf.summary.image("prediction", 255*tf.nn.softmax(nn_last_layer))
+    tf.summary.image("label", 255*tf.nn.softmax(correct_label))
 
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
     correct_label = tf.reshape(correct_label, (-1, num_classes))
