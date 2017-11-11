@@ -218,8 +218,8 @@ def run():
 
         # Merge all the summaries and write them out to /tmp/mnist_logs (by default)
         merged = tf.summary.merge_all()
-        train_writer = tf.summary.FileWriter('logs/{datetime.datetime.now():%Y-%m-%d--%H-%M-%S}-train', sess.graph)
-        test_writer = tf.summary.FileWriter('logs/{datetime.datetime.now():%Y-%m-%d--%H-%M-%S}-test')
+        train_writer = tf.summary.FileWriter('logs/{:%Y-%m-%d--%H-%M-%S}-train'.format(datetime.datetime.now()), sess.graph)
+        test_writer = tf.summary.FileWriter('logs/{:%Y-%m-%d--%H-%M-%S}-test'.format(datetime.datetime.now()))
 
         sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
         # TODO: Train NN using the train_nn function
