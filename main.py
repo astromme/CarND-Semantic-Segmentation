@@ -111,11 +111,11 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     adam = tf.train.AdamOptimizer(learning_rate)
     with tf.name_scope('loss'):
         cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+        variable_summaries(cross_entropy_loss)
     with tf.name_scope('accuracy'):
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(correct_label, 1))
         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-    variable_summaries(cross_entropy_loss)
-    variable_summaries(accuracy)
+        variable_summaries(accuracy)
     train_op = adam.minimize(cross_entropy_loss)
 
     return logits, train_op, cross_entropy_loss
@@ -194,7 +194,7 @@ def run():
     learning_rate = 0.01
     epochs = 1 # 6 was enough for him
     labels_tensor = tf.placeholder(tf.float32, [None, None, None, num_classes])
-    batch_size = 2
+    batch_size = 1
 
     with tf.Session() as sess:
         # Path to vgg model
@@ -223,7 +223,7 @@ def run():
                      labels_tensor, keep_prob_tensor, learning_rate, debug_ops, merged, train_writer, test_writer)
 
         # TODO: Save inference data using helper.save_inference_samples
-        #  helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_tensor)
 
         # OPTIONAL: Apply the trained model to a video
 
