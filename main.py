@@ -144,6 +144,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
     """
 
     # TODO: Implement function
+    step = 1
     for epoch in range(epochs):
         batch = 1
         test_batches = get_batches_fn_test(batch_size)
@@ -154,11 +155,11 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
                 correct_label: label,
                 keep_prob: 0.5,
             })
-            print("epoch {}, batch {}, batch-loss: {}".format(epoch, batch, loss))
-            train_writer.add_summary(summary, epoch*batch+batch)
+            print("step{}: epoch {}, batch {}, batch-loss: {}".format(step, epoch+1, batch, loss))
+            train_writer.add_summary(summary, step)
 
 
-            if batch % 10 == 0:
+            if False and batch % 10 == 0:
                 try:
                     test_image, test_label = next(test_batches)
                 except StopIteration:
@@ -170,10 +171,11 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
                         correct_label: test_label,
                         keep_prob: 1.0,
                     })
-                test_writer.add_summary(summary, epoch*batch+batch)
-                print("  test-batch-loss: {}".format(epoch, batch, loss))
+                test_writer.add_summary(summary, step)
+                print("  test-batch-loss: {}".format(loss))
 
             batch += 1
+            step += 1
 # tests.test_train_nn(train_nn)
 
 
