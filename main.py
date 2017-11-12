@@ -37,7 +37,7 @@ def load_vgg(sess, vgg_path):
     :param vgg_path: Path to vgg folder, containing "variables/" and "saved_model.pb"
     :return: Tuple of Tensors from VGG model (image_input, keep_prob, layer3_out, layer4_out, layer7_out)
     """
-    # TODO: Implement function
+    #   Implement function
     #   Use tf.saved_model.loader.load to load the model and weights
     vgg_tag = 'vgg16'
     vgg_input_tensor_name = 'image_input:0'
@@ -66,7 +66,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :param num_classes: Number of classes to classify
     :return: The Tensor for the last layer of output
     """
-    # TODO: Implement function
+    # Implement function
 
     debug_ops = []
 
@@ -108,7 +108,6 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :param num_classes: Number of classes to classify
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
-    # TODO: Implement function
     tf.summary.image("prediction", tf.expand_dims(255*tf.nn.softmax(nn_last_layer[:,:,:, 1]), 3))
     tf.summary.image("label", tf.expand_dims(255*tf.nn.softmax(correct_label[:,:,:, 1]), 3))
 
@@ -149,7 +148,6 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
     :param test_writer: Test logs writer
     """
 
-    # TODO: Implement function
     step = 1
     for epoch in range(epochs):
         batch = 1
@@ -214,7 +212,7 @@ def run():
         # OPTIONAL: Augment Images for better results
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
-        # TODO: Build NN using load_vgg, layers, and optimize function
+        # Build NN using load_vgg, layers, and optimize function
         input_tensor, keep_prob_tensor, layer3_out_tensor, layer4_out_tensor, layer7_out_tensor = load_vgg(sess, vgg_path)
         output_layer, debug_ops = layers(layer3_out_tensor, layer4_out_tensor, layer7_out_tensor, num_classes)
         logits, train_op, cross_entropy_loss = optimize(output_layer, labels_tensor, learning_rate, num_classes)
@@ -225,12 +223,12 @@ def run():
         test_writer = tf.summary.FileWriter('logs/{:%Y-%m-%d--%H-%M-%S}-test'.format(datetime.datetime.now()))
 
         sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
-        # TODO: Train NN using the train_nn function
+        # Train NN using the train_nn function
         train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test,
                      train_op, cross_entropy_loss, input_tensor,
                      labels_tensor, keep_prob_tensor, learning_rate, debug_ops, merged, train_writer, test_writer)
 
-        # TODO: Save inference data using helper.save_inference_samples
+        # Save inference data using helper.save_inference_samples
         helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob_tensor, input_tensor)
 
         # OPTIONAL: Apply the trained model to a video
