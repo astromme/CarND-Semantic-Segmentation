@@ -75,9 +75,11 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     debug_ops.append(tf.Print(vgg_layer7_out, [tf.shape(vgg_layer7_out)], message="vgg_layer7_out: ", summarize=10, first_n=1))
 
     x = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="post-1x1-convolution: ", summarize=10, first_n=1))
 
     x = tf.layers.conv2d_transpose(x, num_classes, 4, strides=(2, 2), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose1: ", summarize=10, first_n=1))
 
     skip_4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
@@ -198,7 +200,7 @@ def run():
     #  https://www.cityscapes-dataset.com/
 
     learning_rate = 0.001
-    epochs = 6 # 6 was enough for him
+    epochs = 50
     labels_tensor = tf.placeholder(tf.float32, [None, None, None, num_classes])
     batch_size = 10
 
