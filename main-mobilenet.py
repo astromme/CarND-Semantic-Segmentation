@@ -205,7 +205,7 @@ def run():
     tests.test_for_kitti_dataset(data_dir)
 
     # Download pretrained vgg model
-    helper.maybe_download_pretrained_vgg(data_dir)
+    helper.maybe_download_pretrained_mobilenet(data_dir)
 
     # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
     # You'll need a GPU with at least 10 teraFLOPS to train on.
@@ -218,7 +218,7 @@ def run():
 
     with tf.Session() as sess:
         # Path to vgg model
-        mobilenet_path = os.path.join(data_dir, 'mobilenet')
+        mobilenet_path = os.path.join(data_dir, 'ssd_mobilenet_v1_coco_2017_11_08/saved_model')
         # Create function to get batches
         get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape)
         get_batches_fn_test = helper.gen_batch_function(os.path.join(data_dir, 'data_road/testing'), image_shape)
