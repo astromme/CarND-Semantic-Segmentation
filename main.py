@@ -128,6 +128,9 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     adam = tf.train.AdamOptimizer(learning_rate)
     with tf.name_scope('loss'):
         cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        reg_constant = 0.01
+        cross_entropy_loss = cross_entropy_loss + reg_constant * sum(reg_losses)
         tf.summary.scalar('cross_entropy_loss', tf.reduce_max(cross_entropy_loss))
     with tf.name_scope('accuracy'):
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(correct_label, 1))
