@@ -5,6 +5,7 @@ import os.path
 import scipy.misc
 import shutil
 import zipfile
+import tarfile
 import time
 import tensorflow as tf
 from glob import glob
@@ -57,6 +58,42 @@ def maybe_download_pretrained_vgg(data_dir):
 
         # Remove zip file to save space
         os.remove(os.path.join(vgg_path, vgg_filename))
+
+def maybe_download_pretrained_mobilenet(data_dir):
+    """
+    Download and extract pretrained vgg model if it doesn't exist
+    :param data_dir: Directory to download the model to
+    """
+    mobilenet_filename = 'ssd_mobilenet_v1_coco_2017_11_08.tar.gz'
+    mobilenet_path = os.path.join(data_dir, 'ssd_mobilenet_v1_coco_2017_11_08/')
+    mobilenet_files = [
+        os.path.join(mobilenet_path, 'saved_model/saved_model.pb')]
+
+    missing_mobilenet_files = [mobilenet_file for mobilenet_file in mobilenet_files if not os.path.exists(mobilenet_file)]
+    if missing_mobilenet_files:
+        # Clean mobilenet dir
+        if os.path.exists(mobilenet_path):
+            shutil.rmtree(mobilenet_path)
+        os.makedirs(mobilenet_path)
+
+        # Download mobilenet
+        print('Downloading pre-trained mobilenet model...')
+        with DLProgress(unit='B', unit_scale=True, miniters=1) as pbar:
+            urlretrieve(
+                'http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_08.tar.gz',
+                os.path.join(mobilenet_path, mobilenet_filename),
+                pbar.hook)
+
+        # Extract mobilenet
+        print('Extracting model...')
+        tar = tarfile.open(os.path.join(mobilenet_path, mobilenet_filename), "r:gz")
+        print(tar.getmembers())
+        tar.extractall(data_dir)
+        tar.close()
+
+        # Remove zip file to save space
+        os.remove(os.path.join(mobilenet_path, mobilenet_filename))
+
 
 
 def gen_batch_function(data_folder, image_shape):
