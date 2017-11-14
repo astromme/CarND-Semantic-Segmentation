@@ -219,6 +219,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
 def run():
     num_classes = 2
     image_shape = (300, 300)
+    image_true_shape = (160, 576)
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
@@ -263,7 +264,7 @@ def run():
 
         # # Save inference data using helper.save_inference_samples
         keep_prob = tf.placeholder(tf.float32)
-        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_tensor)
+        helper.save_inference_samples_mobilenet(runs_dir, data_dir, sess, image_shape, image_true_shape, logits, keep_prob, input_tensor)
 
         # OPTIONAL: Apply the trained model to a video
 

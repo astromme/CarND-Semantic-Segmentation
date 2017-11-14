@@ -176,3 +176,19 @@ def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_p
         sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
     for name, image in image_outputs:
         scipy.misc.imsave(os.path.join(output_dir, name), image)
+
+
+def save_inference_samples_mobilenet(runs_dir, data_dir, sess, image_shape, image_true_shape, logits, keep_prob, input_image):
+    # Make folder for current run
+    output_dir = os.path.join(runs_dir, "{:%Y-%m-%d--%H-%M-%S}".format(datetime.datetime.now()))
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    os.makedirs(output_dir)
+
+    # Run NN on test images and save them to HD
+    print('Training Finished. Saving test images to: {}'.format(output_dir))
+    image_outputs = gen_test_output(
+        sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
+    for name, image in image_outputs:
+        image = scipy.misc.imresize(image, image_true_shape)
+        scipy.misc.imsave(os.path.join(output_dir, name), image)
