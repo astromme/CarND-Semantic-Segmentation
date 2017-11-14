@@ -82,26 +82,43 @@ def layers(layer4_out, layer11_out, layer13_out, num_classes, debug_ops=[]):
     debug_ops.append(tf.Print(layer11_out, [tf.shape(layer11_out)], message="layer11_out: ", summarize=10, first_n=1))
     debug_ops.append(tf.Print(layer13_out, [tf.shape(layer13_out)], message="layer13_out: ", summarize=10, first_n=1))
 
-    x = tf.layers.conv2d(layer11_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.conv2d(layer13_out, num_classes, 1, strides=(1,1), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="post-1x1-convolution: ", summarize=10, first_n=1))
 
-    x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = x[:,:-1,:-1,:]
     x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose1: ", summarize=10, first_n=1))
 
-    skip_4 = tf.layers.conv2d(layer11_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
-    # x = tf.add(x, skip_4)
+    skip_4 = tf.layers.conv2d(layer11_out, num_classes, 1, strides=(1,1), padding='SAME',
+                       kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                       kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.add(x, skip_4)
     x = tf.layers.batch_normalization(x)
-    x = tf.layers.conv2d_transpose(x, num_classes, 16, strides=(8, 8), padding='VALID', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME',
+                       kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                       kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose2: ", summarize=10, first_n=1))
-    #
-    # skip_3 = tf.layers.conv2d(layer4_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
-    # # x = tf.add(x, skip_3)
-    # x = tf.layers.batch_normalization(x)
-    # x = tf.layers.conv2d_transpose(x, num_classes, 16, strides=(8, 8), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
-    # debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose3: ", summarize=10, first_n=1))
 
+    skip_3 = tf.layers.conv2d(layer4_out, num_classes, 1, strides=(1,1), padding='SAME',
+                       kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                       kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.add(x, skip_3)
+    x = tf.layers.batch_normalization(x)
+    x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME',
+                       kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                       kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = x[:,:-1,:-1,:]
+    debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose3: ", summarize=10, first_n=1))
+
+    x = tf.layers.conv2d_transpose(x, num_classes, 6, strides=(4, 4), padding='SAME',
+                       kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
+                       kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
 
     return x, debug_ops
 # tests.test_layers(layers)
@@ -124,6 +141,9 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     adam = tf.train.AdamOptimizer(learning_rate)
     with tf.name_scope('loss'):
         cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        reg_constant = 0.01
+        cross_entropy_loss = cross_entropy_loss + reg_constant * sum(reg_losses)
         tf.summary.scalar('cross_entropy_loss', tf.reduce_max(cross_entropy_loss))
     with tf.name_scope('accuracy'):
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(correct_label, 1))
@@ -162,17 +182,16 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
         test_batches = get_batches_fn_test(batch_size)
         for image, label in get_batches_fn(batch_size):
             #training
-            _ = sess.run([debug_ops], feed_dict={
+            # _ = sess.run([debug_ops], feed_dict={
+            #     input_image: image,
+            #     correct_label: label,
+            #     # keep_prob: 0.5,
+            # })
+            summary, loss, _, _ = sess.run([merged, cross_entropy_loss, train_op, debug_ops], feed_dict={
                 input_image: image,
                 correct_label: label,
                 # keep_prob: 0.5,
             })
-            break
-            # summary, loss, _, _ = sess.run([merged, cross_entropy_loss, train_op, debug_ops], feed_dict={
-            #     input_image: image,
-            #     correct_label: label,
-            #     keep_prob: 0.5,
-            # })
             print("step{}: epoch {}, batch {}, batch-loss: {}".format(step, epoch+1, batch, loss))
             train_writer.add_summary(summary, step)
 
@@ -187,7 +206,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
                     summary, loss = sess.run([merged, cross_entropy_loss], feed_dict={
                         input_image: test_image,
                         correct_label: test_label,
-                        keep_prob: 1.0,
+                        # keep_prob: 1.0,
                     })
                 test_writer.add_summary(summary, step)
                 print("  test-batch-loss: {}".format(loss))
@@ -199,7 +218,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
 
 def run():
     num_classes = 2
-    image_shape = (224, 806)
+    image_shape = (300, 300)
     data_dir = './data'
     runs_dir = './runs'
     tests.test_for_kitti_dataset(data_dir)
@@ -212,7 +231,7 @@ def run():
     #  https://www.cityscapes-dataset.com/
 
     learning_rate = 0.001
-    epochs = 50
+    epochs = 25
     labels_tensor = tf.placeholder(tf.float32, [None, None, None, num_classes])
     batch_size = 10
 
@@ -243,7 +262,7 @@ def run():
                      labels_tensor, None, learning_rate, debug_ops, merged, train_writer, test_writer)
 
         # # Save inference data using helper.save_inference_samples
-        # helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob_tensor, input_tensor)
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob_tensor, input_tensor)
 
         # OPTIONAL: Apply the trained model to a video
 
