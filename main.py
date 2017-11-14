@@ -74,24 +74,36 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     debug_ops.append(tf.Print(vgg_layer4_out, [tf.shape(vgg_layer4_out)], message="vgg_layer4_out: ", summarize=10, first_n=1))
     debug_ops.append(tf.Print(vgg_layer7_out, [tf.shape(vgg_layer7_out)], message="vgg_layer7_out: ", summarize=10, first_n=1))
 
-    x = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.conv2d(vgg_layer7_out, num_classes, 1, strides=(1,1), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01), 
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="post-1x1-convolution: ", summarize=10, first_n=1))
 
-    x = tf.layers.conv2d_transpose(x, num_classes, 4, strides=(2, 2), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.conv2d_transpose(x, num_classes, 4, strides=(2, 2), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01), 
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose1: ", summarize=10, first_n=1))
 
-    skip_4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    skip_4 = tf.layers.conv2d(vgg_layer4_out, num_classes, 1, strides=(1,1), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01), 
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.add(x, skip_4)
     x = tf.layers.batch_normalization(x)
-    x = tf.layers.conv2d_transpose(x, num_classes, 4, strides=(2, 2), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.conv2d_transpose(x, num_classes, 4, strides=(2, 2), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01), 
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose2: ", summarize=10, first_n=1))
+    skip_3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, strides=(1,1), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01), 
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
 
-    skip_3 = tf.layers.conv2d(vgg_layer3_out, num_classes, 1, strides=(1,1), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.add(x, skip_3)
     x = tf.layers.batch_normalization(x)
-    x = tf.layers.conv2d_transpose(x, num_classes, 16, strides=(8, 8), padding='SAME', kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
+    x = tf.layers.conv2d_transpose(x, num_classes, 16, strides=(8, 8), padding='SAME',
+                         kernel_initializer=tf.truncated_normal_initializer(stddev=0.01), 
+                         kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose3: ", summarize=10, first_n=1))
 
 
@@ -116,6 +128,9 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     adam = tf.train.AdamOptimizer(learning_rate)
     with tf.name_scope('loss'):
         cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=correct_label))
+        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        reg_constant = 0.01
+        cross_entropy_loss = cross_entropy_loss + reg_constant * sum(reg_losses)
         tf.summary.scalar('cross_entropy_loss', tf.reduce_max(cross_entropy_loss))
     with tf.name_scope('accuracy'):
         correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(correct_label, 1))
@@ -198,7 +213,7 @@ def run():
     #  https://www.cityscapes-dataset.com/
 
     learning_rate = 0.001
-    epochs = 50
+    epochs = 25
     labels_tensor = tf.placeholder(tf.float32, [None, None, None, num_classes])
     batch_size = 10
 
