@@ -42,7 +42,7 @@ def load_mobilenet(sess, mobilenet_path):
     #   Implement function
     #   Use tf.saved_model.loader.load to load the model and weights
     mobilenet_tag = 'serve'
-    input_tensor_name = 'image_tensor:0'
+    input_tensor_name = 'Preprocessor/mul:0'
     # keep_prob_tensor_name = 'Dropout_1b:0'
     layer4_out_tensor_name = 'FeatureExtractor/MobilenetV1/MobilenetV1/Conv2d_4_pointwise/Relu6:0'
     layer11_out_tensor_name = 'FeatureExtractor/MobilenetV1/MobilenetV1/Conv2d_11_pointwise/Relu6:0'
@@ -91,7 +91,6 @@ def layers(layer4_out, layer11_out, layer13_out, num_classes, debug_ops=[]):
     x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME',
                          kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
                          kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
-    x = x[:,:-1,:-1,:]
     x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose1: ", summarize=10, first_n=1))
 
@@ -113,7 +112,6 @@ def layers(layer4_out, layer11_out, layer13_out, num_classes, debug_ops=[]):
     x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME',
                        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
                        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
-    x = x[:,:-1,:-1,:]
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose3: ", summarize=10, first_n=1))
 
     x = tf.layers.conv2d_transpose(x, num_classes, 6, strides=(4, 4), padding='SAME',
@@ -218,7 +216,7 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
 
 def run():
     num_classes = 2
-    image_shape = (300, 300)
+    image_shape = (160, 576)
     image_true_shape = (160, 576)
     data_dir = './data'
     runs_dir = './runs'
