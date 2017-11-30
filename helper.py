@@ -95,6 +95,44 @@ def maybe_download_pretrained_mobilenet(data_dir):
         os.remove(os.path.join(mobilenet_path, mobilenet_filename))
 
 
+def random_crop_and_pad_image_and_labels_batch(image_batch, labels_batch, width, height):
+      batch_size = tf.shape(image_batch)[0]
+      img_channels = tf.shape(image_batch)[-1]
+      label_channels = tf.shape(labels_batch)[-1]
+
+      combined = tf.concat([image_batch, labels_batch], axis=3)
+      combined_crop = tf.random_crop(
+         combined,
+         size=[batch_size, width, height, img_channels + label_channels])
+
+      return (combined_crop[:, :, :, :img_channels],
+              combined_crop[:, :, :, img_channels:])
+
+def random_crop_and_pad_image_and_labels(image, labels, size):
+  """Randomly crops `image` together with `labels`.
+  Source: https://stackoverflow.com/a/42149498/1004331
+
+  Args:
+    image: A Tensor with shape [D_1, ..., D_K, N]
+    labels: A Tensor with shape [D_1, ..., D_K, M]
+    size: A Tensor with shape [K] indicating the crop size.
+  Returns:
+    A tuple of (cropped_image, cropped_label).
+  """
+  combined = tf.concat([image, labels], axis=2)
+  image_shape = tf.shape(image)
+  combined_pad = tf.image.pad_to_bounding_box(
+      combined, 0, 0,
+      tf.maximum(size[0], image_shape[0]),
+      tf.maximum(size[1], image_shape[1]))
+  last_label_dim = tf.shape(labels)[-1]
+  last_image_dim = tf.shape(image)[-1]
+  combined_crop = tf.random_crop(
+      combined_pad,
+      size=tf.concat([size, [last_label_dim + last_image_dim]],
+                     axis=0))
+  return (combined_crop[:, :, :last_image_dim],
+          combined_crop[:, :, last_image_dim:])
 
 def gen_batch_function(data_folder, image_shape):
     """
@@ -124,6 +162,8 @@ def gen_batch_function(data_folder, image_shape):
 
                 image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
                 gt_image = scipy.misc.imresize(scipy.misc.imread(gt_image_file), image_shape)
+                # image = scipy.misc.imread(image_file)
+                # gt_image = scipy.misc.imread(gt_image_file)
 
                 gt_bg = np.all(gt_image == background_color, axis=2)
                 gt_bg = gt_bg.reshape(*gt_bg.shape, 1)
@@ -148,7 +188,9 @@ def gen_test_output(sess, logits, keep_prob, image_pl, data_folder, image_shape)
     :return: Output for for each test image
     """
     for image_file in glob(os.path.join(data_folder, 'image_2', '*.png')):
-        image = scipy.misc.imresize(scipy.misc.imread(image_file), image_shape)
+        image = scipy.misc.imread(image_file)
+        image = scipy.misc.imresize(image, image_shape)
+        
 
         im_softmax = sess.run(
             [tf.nn.softmax(logits)],
@@ -190,5 +232,4 @@ def save_inference_samples_mobilenet(runs_dir, data_dir, sess, image_shape, imag
     image_outputs = gen_test_output(
         sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
     for name, image in tqdm(image_outputs):
-        image = scipy.misc.imresize(image, image_true_shape)
         scipy.misc.imsave(os.path.join(output_dir, name), image)

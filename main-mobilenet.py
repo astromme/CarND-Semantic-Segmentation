@@ -7,6 +7,8 @@ import warnings
 from distutils.version import LooseVersion
 import project_tests as tests
 import datetime
+import mobilenet_v1
+from tensorflow.python.framework import graph_util
 
 # Check TensorFlow Version
 assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
@@ -30,59 +32,16 @@ def variable_summaries(var):
     tf.summary.scalar('min', tf.reduce_min(var))
     tf.summary.histogram('histogram', var)
 
-def load_mobilenet(sess, mobilenet_path):
+
+def layers(end_points, num_classes, debug_ops=[]):
     """
-    Load Pretrained VGG Model into TensorFlow.
-    :param sess: TensorFlow Session
-    :param vgg_path: Path to vgg folder, containing "variables/" and "saved_model.pb"
-    :return: Tuple of Tensors from VGG model (image_input, keep_prob, layer3_out, layer4_out, layer7_out)
-    """
-
-    debug_ops = []
-    #   Implement function
-    #   Use tf.saved_model.loader.load to load the model and weights
-    mobilenet_tag = 'serve'
-    input_tensor_name = 'Preprocessor/mul:0'
-    # keep_prob_tensor_name = 'Dropout_1b:0'
-    layer4_out_tensor_name = 'FeatureExtractor/MobilenetV1/MobilenetV1/Conv2d_4_pointwise/Relu6:0'
-    layer11_out_tensor_name = 'FeatureExtractor/MobilenetV1/MobilenetV1/Conv2d_11_pointwise/Relu6:0'
-    layer13_out_tensor_name = 'FeatureExtractor/MobilenetV1/MobilenetV1/Conv2d_13_pointwise/Relu6:0'
-
-    meta_graph = tf.saved_model.loader.load(sess, [mobilenet_tag], mobilenet_path)
-    input_tensor = sess.graph.get_tensor_by_name(input_tensor_name)
-    # keep_prob_tensor = sess.graph.get_tensor_by_name(vgg_keep_prob_tensor_name)
-    layer4_out_tensor = sess.graph.get_tensor_by_name(layer4_out_tensor_name)
-    layer11_out_tensor = sess.graph.get_tensor_by_name(layer11_out_tensor_name)
-    layer13_out_tensor = sess.graph.get_tensor_by_name(layer13_out_tensor_name)
-
-    for i in range(1, 14):
-        tensor = sess.graph.get_tensor_by_name('FeatureExtractor/MobilenetV1/MobilenetV1/Conv2d_{}_pointwise/Relu6:0'.format(i))
-        debug_ops.append(tf.Print(tensor, [tf.shape(tensor)], message="Conv2d_{}_pointwise: ".format(i), summarize=10, first_n=1))
-
-
-    print(input_tensor)
-    print(layer13_out_tensor)
-
-    return input_tensor, layer4_out_tensor, layer11_out_tensor, layer13_out_tensor, debug_ops
-# tests.test_load_vgg(load_vgg, tf)
-
-
-def layers(layer4_out, layer11_out, layer13_out, num_classes, debug_ops=[]):
-    """
-    Create the layers for a fully convolutional network.  Build skip-layers using the vgg layers.
-    :param vgg_layer4_out: TF Tensor for VGG Layer 3 output
-    :param vgg_layer4_out: TF Tensor for VGG Layer 4 output
-    :param vgg_layer7_out: TF Tensor for VGG Layer 7 output
+    Create the layers for a fully convolutional network.  Build skip-layers using the mobilenet layers.
+    :param end_points: dictionary of names to tensors for various activations in the graph
     :param num_classes: Number of classes to classify
     :return: The Tensor for the last layer of output
     """
-    # Implement function
 
-    debug_ops.append(tf.Print(layer4_out, [tf.shape(layer4_out)], message="layer4_out: ", summarize=10, first_n=1))
-    debug_ops.append(tf.Print(layer11_out, [tf.shape(layer11_out)], message="layer11_out: ", summarize=10, first_n=1))
-    debug_ops.append(tf.Print(layer13_out, [tf.shape(layer13_out)], message="layer13_out: ", summarize=10, first_n=1))
-
-    x = tf.layers.conv2d(layer13_out, num_classes, 1, strides=(1,1), padding='SAME',
+    x = tf.layers.conv2d(end_points["Conv2d_13_pointwise"], num_classes, 1, strides=(1,1), padding='SAME',
                          kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
                          kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     x = tf.layers.batch_normalization(x)
@@ -94,20 +53,20 @@ def layers(layer4_out, layer11_out, layer13_out, num_classes, debug_ops=[]):
     x = tf.layers.batch_normalization(x)
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose1: ", summarize=10, first_n=1))
 
-    skip_4 = tf.layers.conv2d(layer11_out, num_classes, 1, strides=(1,1), padding='SAME',
+    skip_11 = tf.layers.conv2d(end_points["Conv2d_11_pointwise"], num_classes, 1, strides=(1,1), padding='SAME',
                        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
                        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
-    x = tf.add(x, skip_4)
+    x = tf.add(x, skip_11)
     x = tf.layers.batch_normalization(x)
     x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME',
                        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
                        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
     debug_ops.append(tf.Print(x, [tf.shape(x)], message="transpose2: ", summarize=10, first_n=1))
 
-    skip_3 = tf.layers.conv2d(layer4_out, num_classes, 1, strides=(1,1), padding='SAME',
+    skip_4 = tf.layers.conv2d(end_points["Conv2d_4_pointwise"], num_classes, 1, strides=(1,1), padding='SAME',
                        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
                        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
-    x = tf.add(x, skip_3)
+    x = tf.add(x, skip_4)
     x = tf.layers.batch_normalization(x)
     x = tf.layers.conv2d_transpose(x, num_classes, 3, strides=(2, 2), padding='SAME',
                        kernel_initializer=tf.truncated_normal_initializer(stddev=0.01),
@@ -119,7 +78,6 @@ def layers(layer4_out, layer11_out, layer13_out, num_classes, debug_ops=[]):
                        kernel_regularizer=tf.contrib.layers.l2_regularizer(1e-3))
 
     return x, debug_ops
-# tests.test_layers(layers)
 
 
 def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
@@ -131,8 +89,8 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     :param num_classes: Number of classes to classify
     :return: Tuple of (logits, train_op, cross_entropy_loss)
     """
-    tf.summary.image("prediction", tf.expand_dims(255*tf.nn.softmax(nn_last_layer[:,:,:, 1]), 3))
-    tf.summary.image("label", tf.expand_dims(255*tf.nn.softmax(correct_label[:,:,:, 1]), 3))
+    tf.summary.image("prediction", tf.expand_dims(255*tf.nn.softmax(nn_last_layer)[:,:,:, 1], 3))
+    tf.summary.image("label", tf.expand_dims(255*tf.nn.softmax(correct_label)[:,:,:, 1], 3))
 
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
     correct_label = tf.reshape(correct_label, (-1, num_classes))
@@ -174,11 +132,20 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test, trai
     :param test_writer: Test logs writer
     """
 
+
+    cropped_image_op, cropped_label_op = helper.random_crop_and_pad_image_and_labels_batch(input_image, correct_label, 160, 160)
+
     step = 1
     for epoch in range(epochs):
         batch = 1
         test_batches = get_batches_fn_test(batch_size)
         for image, label in get_batches_fn(batch_size):
+            # image, label = sess.run([cropped_image_op, cropped_label_op], feed_dict={
+            #     input_image: image,
+            #     correct_label: label,
+            # })
+
+            # print(image, label)
             #training
             # _ = sess.run([debug_ops], feed_dict={
             #     input_image: image,
@@ -223,20 +190,37 @@ def run():
     tests.test_for_kitti_dataset(data_dir)
 
     # Download pretrained vgg model
-    helper.maybe_download_pretrained_mobilenet(data_dir)
+    # helper.maybe_download_pretrained_mobilenet(data_dir)
 
     # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
     # You'll need a GPU with at least 10 teraFLOPS to train on.
     #  https://www.cityscapes-dataset.com/
 
     learning_rate = 0.001
-    epochs = 25
+    epochs = 20
     labels_tensor = tf.placeholder(tf.float32, [None, None, None, num_classes])
-    batch_size = 10
+    batch_size = 20
+
+    img_size = 160
+    factor = 0.5
+    weight_decay = 0.0
+    arg_scope = mobilenet_v1.mobilenet_v1_arg_scope(weight_decay=weight_decay)
+    input_image = tf.placeholder(tf.float32, shape=(None, None, None, 3), name="input")
+
+    with tf.contrib.slim.arg_scope(arg_scope):
+        _, end_points = mobilenet_v1.mobilenet_v1(input_image,
+                    num_classes=1001,
+                    is_training=False,
+                    depth_multiplier=factor)
+
+    for name in end_points:
+        print(name, end_points[name])
+
 
     with tf.Session() as sess:
         # Path to vgg model
-        mobilenet_path = os.path.join(data_dir, 'ssd_mobilenet_v1_coco_2017_11_08/saved_model')
+
+        mobilenet_path = os.path.join(data_dir, 'mobilenet_v1_0.50_160_2017_06_14/mobilenet_v1_0.50_160.ckpt')
         # Create function to get batches
         get_batches_fn = helper.gen_batch_function(os.path.join(data_dir, 'data_road/training'), image_shape)
         get_batches_fn_test = helper.gen_batch_function(os.path.join(data_dir, 'data_road/testing'), image_shape)
@@ -244,11 +228,16 @@ def run():
         # OPTIONAL: Augment Images for better results
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
+        rest_var = tf.contrib.slim.get_variables_to_restore()
+
+        saver = tf.train.Saver(rest_var)
+        saver.restore(sess, mobilenet_path)
+
         # Build NN using load_vgg, layers, and optimize function
-        input_tensor, layer4_tensor, layer11_tensor, layer13_tensor, debug_ops = load_mobilenet(sess, mobilenet_path)
-        output_layer, debug_ops = layers(layer4_tensor, layer11_tensor, layer13_tensor, num_classes, debug_ops)
+        # input_tensor, layer4_tensor, layer11_tensor, layer13_tensor, debug_ops = load_mobilenet(sess, mobilenet_path)
+        output_layer, debug_ops = layers(end_points, num_classes)
         logits, train_op, cross_entropy_loss = optimize(output_layer, labels_tensor, learning_rate, num_classes)
-        #
+
         # # Merge all the summaries and write them out to /tmp/mnist_logs (by default)
         merged = tf.summary.merge_all()
         train_writer = tf.summary.FileWriter('logs/{:%Y-%m-%d--%H-%M-%S}-train'.format(datetime.datetime.now()), sess.graph)
@@ -257,12 +246,32 @@ def run():
         sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
         # # Train NN using the train_nn function
         train_nn(sess, epochs, batch_size, get_batches_fn, get_batches_fn_test,
-                     train_op, cross_entropy_loss, input_tensor,
+                     train_op, cross_entropy_loss, input_image,
                      labels_tensor, None, learning_rate, debug_ops, merged, train_writer, test_writer)
+
+
+        predictions = tf.contrib.layers.softmax(logits)
+        output = tf.identity(predictions, name='output')
+
+        graph = tf.get_default_graph()
+        input_graph_def = graph.as_graph_def()
+
+        # We use a built-in TF helper to export variables to constant
+        output_graph_def = graph_util.convert_variables_to_constants(
+            sess, # The session is used to retrieve the weights
+            input_graph_def, # The graph_def is used to retrieve the nodes
+            # The output node names are used to select the useful nodes
+            ['output']
+            )
+
+        # Finally we serialize and dump the output graph to the filesystem
+        with tf.gfile.GFile('mobilenet_saved_model.pb', "wb") as f:
+            f.write(output_graph_def.SerializeToString())
+        print("{} ops in the final graph.".format(len(output_graph_def.node)))
 
         # # Save inference data using helper.save_inference_samples
         keep_prob = tf.placeholder(tf.float32)
-        helper.save_inference_samples_mobilenet(runs_dir, data_dir, sess, image_shape, image_true_shape, logits, keep_prob, input_tensor)
+        helper.save_inference_samples_mobilenet(runs_dir, data_dir, sess, image_shape, image_true_shape, logits, keep_prob, input_image)
 
         # OPTIONAL: Apply the trained model to a video
 
